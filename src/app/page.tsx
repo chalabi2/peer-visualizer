@@ -53,15 +53,43 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Aggregate total IPs for each country
-    const newData = Object.entries(groupedPeers).map(
-      ([country, { totalIPs }]) => ({
-        name: country,
-        value: totalIPs,
-      })
-    );
+    // Flatten the data to include ISPs as separate entries while keeping track of their countries
+    const newData: React.SetStateAction<any[]> = [];
+    Object.entries(groupedPeers).forEach(([country, { isps }]) => {
+      Object.entries(isps).forEach(([isp, ips]) => {
+        newData.push({
+          name: `${isp} (${country})`,
+          value: ips.length,
+          country: country, // Keep track of the country for each ISP
+          isp: isp,
+          ips: ips, // Optional: Include the IPs if needed for tooltip or further details
+        });
+      });
+    });
     setPieData(newData);
   }, [groupedPeers]);
+
+  const CustomTooltip = ({
+    active,
+    payload,
+  }: {
+    active: boolean;
+    payload: any[];
+  }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload; // Get the data for the active segment
+      return (
+        <div className="custom-tooltip bg-white shadow-lg p-3">
+          <p className="label">{`${data.isp} in ${data.country}`}</p>
+          <p className="intro">{`Total IPs: ${data.value}`}</p>
+          {/* Optionally list IPs */}
+          {/* <ul>{data.ips.map(ip => <li key={ip}>{ip}</li>)}</ul> */}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   // Example of selecting a country, could be set from a dropdown or another UI element
   useEffect(() => {
@@ -72,22 +100,19 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col overflow-clip mx-auto items-center justify-center p-4">
       <div className="mt-8 w-full max-w-4xl ">
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={500}>
           <PieChart>
             <Pie
               data={pieData}
               cx="50%"
               cy="50%"
               labelLine={false}
-              outerRadius={150}
+              outerRadius={200}
               fill="#8884d8"
               dataKey="value"
               nameKey="name"
-              label={({ name, percent }) =>
-                `${name}: ${(percent * 100).toFixed(0)}%`
-              }
-            ></Pie>
-            <Tooltip />
+              label={({ name }) => name.split(" ")[0]}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
