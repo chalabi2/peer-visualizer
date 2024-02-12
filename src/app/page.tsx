@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Tooltip } from "react-leaflet";
-import { ResponsiveContainer, PieChart, Pie } from "recharts";
+
+import { ResponsiveContainer, PieChart, Pie, Tooltip } from "recharts";
 
 interface IPeer {
   ip: string;
@@ -53,19 +53,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Flatten the data to include ISPs as separate entries while keeping track of their countries
-    const newData: React.SetStateAction<any[]> = [];
-    Object.entries(groupedPeers).forEach(([country, { isps }]) => {
+    const ispTotals = new Map();
+
+    // Aggregate ISPs across all countries
+    Object.values(groupedPeers).forEach(({ isps }) => {
       Object.entries(isps).forEach(([isp, ips]) => {
-        newData.push({
-          name: `${isp} (${country})`,
-          value: ips.length,
-          country: country, // Keep track of the country for each ISP
-          isp: isp,
-          ips: ips, // Optional: Include the IPs if needed for tooltip or further details
-        });
+        if (!ispTotals.has(isp)) {
+          ispTotals.set(isp, 0);
+        }
+        ispTotals.set(isp, ispTotals.get(isp) + ips.length);
       });
     });
+
+    // Create pie chart data from the aggregated ISP totals
+    const newData = Array.from(ispTotals, ([isp, totalIPs]) => ({
+      name: isp,
+      value: totalIPs,
+    }));
+
     setPieData(newData);
   }, [groupedPeers]);
 
@@ -79,11 +84,9 @@ export default function Home() {
     if (active && payload && payload.length) {
       const data = payload[0].payload; // Get the data for the active segment
       return (
-        <div className="custom-tooltip bg-white shadow-lg p-3">
-          <p className="label">{`${data.isp} in ${data.country}`}</p>
+        <div className="custom-tooltip text-black bg-white shadow-lg p-3">
+          <p className="label">{`${data.name}`}</p>
           <p className="intro">{`Total IPs: ${data.value}`}</p>
-          {/* Optionally list IPs */}
-          {/* <ul>{data.ips.map(ip => <li key={ip}>{ip}</li>)}</ul> */}
         </div>
       );
     }
@@ -92,10 +95,19 @@ export default function Home() {
   };
 
   // Example of selecting a country, could be set from a dropdown or another UI element
-  useEffect(() => {
-    const firstCountry = Object.keys(groupedPeers)[0];
-    setSelectedCountry(firstCountry);
-  }, [groupedPeers]);
+  const renderCustomLabel = ({
+    name,
+    percent,
+  }: {
+    name: string;
+    percent: number;
+  }) => {
+    // Only show label if percent is 10% or more
+    if (percent >= 0.1) {
+      return `${name}: ${(percent * 100).toFixed(0)}%`;
+    }
+    return null;
+  };
 
   return (
     <main className="flex min-h-screen flex-col overflow-clip mx-auto items-center justify-center p-4">
@@ -111,8 +123,9 @@ export default function Home() {
               fill="#8884d8"
               dataKey="value"
               nameKey="name"
-              label={({ name }) => name.split(" ")[0]}
+              label={renderCustomLabel} // Use the custom label function here
             />
+            <Tooltip content={<CustomTooltip active={true} payload={[]} />} />
           </PieChart>
         </ResponsiveContainer>
       </div>
