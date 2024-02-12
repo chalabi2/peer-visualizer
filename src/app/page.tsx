@@ -32,7 +32,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
+    <main className="flex min-h-screen flex-col mx-auto items-center justify-center p-4">
       <div className="mt-8 w-full max-w-4xl ">
         <h1 className="text-2xl font-bold mb-4">
           Peers Grouped by Country and ISP

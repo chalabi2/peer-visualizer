@@ -109,20 +109,27 @@ const followRpcAddresses = async (initialPeerInfo: PeerInfo[], visited = new Set
 
 
 async function updateDatabaseWithPeerInfo() {
-    dbConnect()
-    // Your logic to fetch peer information and store it in the database
-    const initialUrl = `http://${process.env.NODE_IP}/net_info`; // Adjust as necessary
+    await dbConnect(); // Ensure connection to the database
+
+    // Fetch peer information
+    const initialUrl = `http://${process.env.NODE_IP}/net_info`;
     const initialPeers = await fetchPeerInfo(initialUrl);
     const allPeers = await followRpcAddresses(initialPeers, new Set());
     const uniqueIPs = [...new Set(allPeers.map(peer => peer.ip))];
     const peersWithGeo = await fetchGeoInfoBatch(uniqueIPs);
-  
-    // Consider using upserts or more sophisticated logic to avoid duplicates
-    await PeerInfo.deleteMany(); // Be cautious with this in a production environment
-    await PeerInfo.insertMany(peersWithGeo);
-  
-    console.log('Database updated with the latest peer information');
-  }
+
+    // Update database with new or updated peer information
+    for (const peer of peersWithGeo) {
+        await PeerInfo.updateOne(
+            { ip: peer.ip }, // Filter
+            { $set: peer }, // Update
+            { upsert: true } // Option to insert if not exists
+        );
+    }
+
+    console.log('Database updated with the latest peer information.');
+}
+
   
   async function ensureDatabaseIsPopulated() {
     await dbConnect();
