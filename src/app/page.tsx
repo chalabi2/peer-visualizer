@@ -24,8 +24,9 @@ interface IGroupedPeers {
 
 export default function Home() {
   const [groupedPeers, setGroupedPeers] = useState<IGroupedPeers>({});
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+
   const [pieData, setPieData] = useState<any[]>([]);
+  const [countryPieData, setCountryPieData] = useState<any[]>([]);
 
   const fetchPeers = async () => {
     const response = await fetch(`/api/queryNode?`);
@@ -74,6 +75,19 @@ export default function Home() {
     setPieData(newData);
   }, [groupedPeers]);
 
+  useEffect(() => {
+    // Aggregate the total IPs per country
+    const countryTotals = Object.entries(groupedPeers).map(
+      ([country, info]) => ({
+        name: country,
+        value: info.totalIPs,
+      })
+    );
+
+    // Assuming you want to keep the ISP data as well, you might need a separate state for the country pie data
+    setCountryPieData(countryTotals);
+  }, [groupedPeers]);
+
   const CustomTooltip = ({
     active,
     payload,
@@ -103,7 +117,7 @@ export default function Home() {
     percent: number;
   }) => {
     // Only show label if percent is 10% or more
-    if (percent >= 0.1) {
+    if (percent >= 0.03) {
       return `${name}: ${(percent * 100).toFixed(0)}%`;
     }
     return null;
@@ -111,7 +125,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col overflow-clip mx-auto items-center justify-center p-4">
-      <div className="mt-8 w-full max-w-4xl ">
+      <div className="mt-8 w-full flex flex-row max-w-8xl ">
         <ResponsiveContainer width="100%" height={500}>
           <PieChart>
             <Pie
@@ -126,6 +140,22 @@ export default function Home() {
               label={renderCustomLabel} // Use the custom label function here
             />
             <Tooltip content={<CustomTooltip active={true} payload={[]} />} />
+          </PieChart>
+        </ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={400}>
+          <PieChart>
+            <Pie
+              data={countryPieData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              outerRadius={150}
+              fill="#82ca9d"
+              dataKey="value"
+              nameKey="name"
+              label={renderCustomLabel}
+            />
+            <Tooltip content={<CustomTooltip active={false} payload={[]} />} />
           </PieChart>
         </ResponsiveContainer>
       </div>
