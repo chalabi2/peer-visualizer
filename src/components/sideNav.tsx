@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 const SideNav = () => {
   const router = useRouter();
@@ -162,4 +163,10 @@ const SideNav = () => {
   );
 };
 
-export default SideNav;
+export default function SideNavWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SideNav />
+    </Suspense>
+  );
+}

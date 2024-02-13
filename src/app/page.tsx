@@ -1,7 +1,7 @@
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 
 import { ResponsiveContainer, PieChart, Pie, Tooltip, Cell } from "recharts";
 
@@ -24,7 +24,7 @@ interface IGroupedPeers {
   [country: string]: ICountryInfo; // Country name as key and country info as value
 }
 
-export default function Home() {
+function Home() {
   const searchParams = useSearchParams();
   const initialNetwork = searchParams?.has("network")
     ? searchParams.get("network")
@@ -404,5 +404,13 @@ export default function Home() {
     <main className="flex min-h-screen max-w-screen flex-col overflow-clip mx-auto items-center justify-center">
       {renderView()}
     </main>
+  );
+}
+
+export default function HomeWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <Home />
+    </Suspense>
   );
 }
