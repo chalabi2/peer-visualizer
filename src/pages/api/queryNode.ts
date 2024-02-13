@@ -27,17 +27,21 @@ const axiosInstance = axios.create({
 
 // Updated fetchPeerInfo function to accept full URL
 const fetchPeerInfo = async (url: string): Promise<PeerInfo[]> => {
-    try {
-      const { data } = await axiosInstance.get(url);
-      return data.result.peers.map((peer: any) => ({
-        ip: peer.remote_ip,
-        rpcAddress: peer.node_info.other.rpc_address,
-      }));
-    } catch (error) {
-      console.error(`Error fetching peer info from ${url}:`, error);
+  try {
+    const { data } = await axiosInstance.get(url);
+    if (!data.result || !Array.isArray(data.result.peers)) {
+      console.error(`Unexpected API response structure from ${url}:`, data);
       return [];
     }
-  };
+    return data.result.peers.map((peer: any) => ({
+      ip: peer.remote_ip,
+      rpcAddress: peer.node_info.other.rpc_address,
+    }));
+  } catch (error) {
+    console.error(`Error fetching peer info from ${url}:`, error);
+    return [];
+  }
+};
 
 // Fetches geo information for a list of IPs
 const fetchGeoInfoBatch = async (ips: string[]): Promise<PeerGeoInfo[]> => {
@@ -108,53 +112,100 @@ const followRpcAddresses = async (initialPeerInfo: PeerInfo[], visited = new Set
 
 
 
-async function updateDatabaseWithPeerInfo() {
+async function updateDatabaseWithPeerInfo(network: string, url: string) {
     await dbConnect(); // Ensure connection to the database
 
-    // Fetch peer information
-    const initialUrl = `http://${process.env.NODE_IP}/net_info`;
-    const initialPeers = await fetchPeerInfo(initialUrl);
+    const initialPeers = await fetchPeerInfo(url);
     const allPeers = await followRpcAddresses(initialPeers, new Set());
     const uniqueIPs = [...new Set(allPeers.map(peer => peer.ip))];
     const peersWithGeo = await fetchGeoInfoBatch(uniqueIPs);
 
+    // Include the network in the peer information
+    const peersWithNetwork = peersWithGeo.map(peer => ({ ...peer, network }));
+
     // Update database with new or updated peer information
-    for (const peer of peersWithGeo) {
+    for (const peer of peersWithNetwork) {
         await PeerInfo.updateOne(
-            { ip: peer.ip }, // Filter
+            { ip: peer.ip, network: peer.network }, // Filter with network
             { $set: peer }, // Update
             { upsert: true } // Option to insert if not exists
         );
     }
 
-    console.log('Database updated with the latest peer information.');
+    console.log(`Database updated with the latest peer information for ${network}.`);
 }
 
   
-  async function ensureDatabaseIsPopulated() {
-    await dbConnect();
-    const count = await PeerInfo.countDocuments();
-    if (count === 0) {
-      console.log('Database is empty. Populating now...');
-      await updateDatabaseWithPeerInfo();
-    } else {
-      console.log(`Database already populated with ${count} records.`);
-    }
+async function ensureDatabaseIsPopulated() {
+  await dbConnect();
+
+  // Define networks and their respective URLs from the environment variables
+  const networks = {
+      Berachain: process.env.BERACHAIN_NET_INFO_URL,
+      Evmos: process.env.EVMOS_NET_INFO_URL,
+      Akash: process.env.AKASH_NET_INFO_URL,
+      Canto: process.env.CANTO_NET_INFO_URL,
+      Osmosis: process.env.OSMOSIS_NET_INFO_URL,
+      Injective: process.env.INJECTIVE_NET_INFO_URL,
+      Celestia: process.env.CELESTIA_NET_INFO_URL,
+      Dymension: process.env.DYMENSION_NET_INFO_URL,
+      Gravity: process.env.GRAVITY_NET_INFO_URL,
+  };
+
+  // Iterate through each network to check and populate data if necessary
+  for (const [network, url] of Object.entries(networks)) {
+      const count = await PeerInfo.countDocuments({ network });
+
+      if (count === 0) {
+          console.log(`Database is empty for ${network}. Populating now...`);
+          await updateDatabaseWithPeerInfo(network, url ?? '');
+      } else {
+          console.log(`Database already populated with ${count} records for ${network}.`);
+      }
   }
-  
+}
   // Run the check once at the start
   ensureDatabaseIsPopulated();
   // Schedule the database update to run every 12 hours
-  cron.schedule('0 */12 * * *', async () => {
-    console.log('Updating database with the latest peer information...');
-    await updateDatabaseWithPeerInfo();
-  });
+  const networks = {
+    Berachain: process.env.BERACHAIN_NET_INFO_URL,
+    Evmos: process.env.EVMOS_NET_INFO_URL,
+  };
+  
+  async function scheduleNetworkUpdates() {
+    // Ensure database is initially populated for all networks
+    await ensureDatabaseIsPopulated();
+  
+    // Define networks and their respective URLs from the environment variables
+    const networks = {
+      Berachain: process.env.BERACHAIN_NET_INFO_URL,
+      Evmos: process.env.EVMOS_NET_INFO_URL,
+      Akash: process.env.AKASH_NET_INFO_URL,
+      Canto: process.env.CANTO_NET_INFO_URL,
+      Osmosis: process.env.OSMOSIS_NET_INFO_URL,
+      Injective: process.env.INJECTIVE_NET_INFO_URL,
+      Celestia: process.env.CELESTIA_NET_INFO_URL,
+      Dymension: process.env.DYMENSION_NET_INFO_URL,
+      Gravity: process.env.GRAVITY_NET_INFO_URL,
+    };
+  
+    // Schedule database updates for each network
+    Object.entries(networks).forEach(([network, url]) => {
+      // Schedule the database update to run every 12 hours for each network
+      cron.schedule('0 */12 * * *', async () => {
+        console.log(`Updating database with the latest peer information for ${network}...`);
+        await updateDatabaseWithPeerInfo(network, url ?? '');
+      });
+    });
+  }
+  
+  scheduleNetworkUpdates();
   
   export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    console.log('Api queryNode called');
-    await dbConnect(); // Ensure the database connection is established
-  
-    // Now, it's safe to perform database operations
-    const peers = await PeerInfo.find();
+    const { network } = req.query; // Extract network from query parameters
+    console.log(`Api queryNode called for ${network}`);
+    await dbConnect();
+
+    const peers = await PeerInfo.find({ network: network }); // Fetch peers for the specified network
     res.status(200).json(peers);
-  }
+}
