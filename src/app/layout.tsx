@@ -17,9 +17,23 @@ export default function RootLayout({
 }>) {
   return (
     <html className="h-full bg-gray-900" lang="en">
-      <SideNav />
-      <body className={`${inter.className} h-full ml-72 mx-auto my-auto`}>
-        {children}
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>{`${inter.style}`}</style>
+      </head>
+      <body className="h-full sm:h-screen flex flex-col justify-center sm:block">
+        <div className="block sm:hidden text-center">
+          <div className="mx-auto font-bold text-white">
+            Mobile is currently not supported. Please use a desktop browser.
+          </div>
+        </div>
+
+        <div
+          className={`${inter.className} hidden md:block ml-72 mx-auto my-auto`}
+        >
+          <SideNav />
+          {children}
+        </div>
       </body>
     </html>
   );

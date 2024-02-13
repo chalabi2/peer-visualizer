@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { chains } from "chain-registry";
 
 const SideNav = () => {
   const router = useRouter();
@@ -12,6 +13,33 @@ const SideNav = () => {
   };
 
   const searchParams = useSearchParams();
+
+  const convertChainName = (chainName: string) => {
+    if (chainName.endsWith("testnet")) {
+      return chainName.replace("testnet", "-testnet");
+    }
+
+    switch (chainName) {
+      case "cosmoshub":
+        return "cosmos";
+      case "assetmantle":
+        return "asset-mantle";
+      case "cryptoorgchain":
+        return "crypto-org";
+      case "dig":
+        return "dig-chain";
+      case "gravity":
+        return "gravitybridge";
+      case "kichain":
+        return "ki-chain";
+      case "oraichain":
+        return "orai-chain";
+      case "terra":
+        return "terra-classic";
+      default:
+        return chainName;
+    }
+  };
 
   const networks = [
     { name: "Akash", url: "#Akash" },
@@ -61,8 +89,8 @@ const SideNav = () => {
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            clip-rule="evenodd"
-            fill-rule="evenodd"
+            clipRule="evenodd"
+            fillRule="evenodd"
             d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"
           ></path>
         </svg>
@@ -124,9 +152,9 @@ const SideNav = () => {
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   <path
-                    fill-rule="evenodd"
+                    fillRule="evenodd"
                     d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                    clip-rule="evenodd"
+                    clipRule="evenodd"
                   ></path>
                 </svg>
                 <span className="ml-3">Table</span>
@@ -134,28 +162,45 @@ const SideNav = () => {
             </li>
           </ul>
           <ul className="pt-5 mt-5 space-y-2 border-t border-gray-200 dark:border-gray-700">
-            {networks.map((network, index) => (
-              <li key={index}>
-                <a
-                  href={network.url}
-                  onClick={() => handleNetworkSelect(network.name)}
-                  className={`flex items-center p-2 text-base font-normal rounded-lg transition duration-75 group ${
-                    isActiveNetwork(network.name)
-                      ? "bg-blue-500 text-white"
-                      : "text-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
-                  }`}
-                >
-                  <svg
-                    aria-hidden="true"
-                    className="flex-shrink-0 w-6 h-6 text-gray-400 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                    xmlns="http://www.w3.org/2000/svg"
-                  ></svg>
-                  <span className="ml-3">{network.name}</span>
-                </a>
-              </li>
-            ))}
+            {networks.map((network, index) => {
+              const modifiedChainName = convertChainName(
+                network.name.toLocaleLowerCase()
+              );
+
+              const chainInfo = chains.find(
+                (chain) =>
+                  chain.chain_name.toLowerCase() ===
+                  modifiedChainName.toLowerCase()
+              );
+
+              const logoUrl =
+                chainInfo?.images?.find((img) => img.svg)?.svg ||
+                chainInfo?.images?.find((img) => img.png)?.png ||
+                "https://via.placeholder.com/100.svg";
+
+              return (
+                <li key={index}>
+                  <a
+                    href={network.url}
+                    onClick={() => handleNetworkSelect(network.name)}
+                    className={`flex items-center p-2 text-base font-normal rounded-lg transition duration-75 group ${
+                      isActiveNetwork(network.name)
+                        ? "bg-blue-500 text-white"
+                        : "text-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
+                    }`}
+                  >
+                    {logoUrl && (
+                      <img
+                        src={logoUrl}
+                        alt={`${network.name} logo`}
+                        className="flex-shrink-0 rounded-3xl w-6 h-6 min-w-6 min-h-6 mr-2"
+                      />
+                    )}
+                    <span className="ml-3">{network.name}</span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </aside>

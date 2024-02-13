@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "chain-registry": "^1.28.0",
     "leaflet": "^1.9.4",
     "mongoose": "^8.1.2",
     "next": "14.1.0",
