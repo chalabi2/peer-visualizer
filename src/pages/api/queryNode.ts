@@ -150,6 +150,7 @@ async function ensureDatabaseIsPopulated() {
       Celestia: process.env.CELESTIA_NET_INFO_URL,
       Dymension: process.env.DYMENSION_NET_INFO_URL,
       Gravity: process.env.GRAVITY_NET_INFO_URL,
+      Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
   };
 
   // Iterate through each network to check and populate data if necessary
@@ -187,6 +188,7 @@ async function ensureDatabaseIsPopulated() {
       Celestia: process.env.CELESTIA_NET_INFO_URL,
       Dymension: process.env.DYMENSION_NET_INFO_URL,
       Gravity: process.env.GRAVITY_NET_INFO_URL,
+      Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
     };
   
     // Schedule database updates for each network
