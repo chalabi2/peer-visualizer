@@ -52,6 +52,7 @@ const SideNav = () => {
     { name: "Injective", url: "#Injective" },
     { name: "Osmosis", url: "#Osmosis" },
     { name: "Quicksilver", url: "#Quicksilver" },
+    { name: "Sei", url: "#Sei" },
   ];
 
   const handleTableView = () => {
