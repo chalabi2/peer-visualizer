@@ -37,7 +37,7 @@ Third, install the dependencies & run the development server:
 
 `bun install && bun run dev`
 
-Please allow for the database to populate. This may take a few minutes depending on how many nodes are accessible at the moment.
+Please allow for the database to populate. This may take a few minutes depending on how many nodes are accessible at the moment. Follow along the console to see any errors that may occur. Many nodes will refuse connection or timeout and will be skipped but added as peers if they are present in the peers list of any node.
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
