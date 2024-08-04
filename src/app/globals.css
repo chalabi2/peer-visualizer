@@ -26,3 +26,18 @@ body {
     text-wrap: balance;
   }
 }
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recharts-sector,
+.recharts-curve,
+.recharts-polygon {
+  outline: none;
+}
+
+.recharts-sector:focus,
+.recharts-curve:focus,
+.recharts-polygon:focus {
+  outline: none;
+}

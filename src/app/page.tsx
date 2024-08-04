@@ -3,7 +3,6 @@ import MapView from "@/components/mapView";
 import { useSearchParams } from "next/navigation";
 
 import React, { useEffect, useState, Suspense } from "react";
-import { MapContainer } from "react-leaflet";
 
 import { ResponsiveContainer, PieChart, Pie, Tooltip, Cell } from "recharts";
 
@@ -293,9 +292,15 @@ function Home() {
       case "map":
         return (
           <div className="mt-4 w-full ">
-            <div className="mb-4">
+            <div className="mb-4 flex flex-row justify-start gap-24 items-center">
               <span className="text-white font-extrabold text-4xl">
                 {selectedNetwork}
+              </span>
+              <span className="text-white font-extrabold text-lg">
+                {totalFoundNodes} Nodes Found
+              </span>
+              <span className="text-white font-extrabold text-lg">
+                Mostly Deployed In {countryWithMostNodes.name}
               </span>
             </div>
             <MapView groupedPeers={groupedPeers} />

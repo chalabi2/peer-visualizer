@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   ComposableMap,
   Geographies,
@@ -10,7 +10,10 @@ import { scaleLinear } from "d3-scale";
 import { Tooltip } from "react-tooltip";
 import { IGroupedPeers } from "@/app/page";
 
-const geoUrl = "/countries.geojson";
+const countries = "/countries.geojson";
+const states = "/states.geojson";
+
+const zoomLevels = [1, 2, 4];
 
 const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   const [position, setPosition] = useState({ coordinates: [0, 0], zoom: 1 } as {
@@ -33,30 +36,70 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     );
   }, [groupedPeers]);
 
-  const colorScale = scaleLinear<string>()
-    .domain([0, Object.keys(groupedPeers).length])
-    .range(["#FFB3BA", "#FF6B6B"]);
+  const colorScale = useMemo(
+    () =>
+      scaleLinear<string>()
+        .domain([0, Object.keys(groupedPeers).length])
+        .range(["#FFB3BA", "#FF6B6B"]),
+    [groupedPeers]
+  );
 
-  const handleZoomIn = () => {
+  const markerSizes = useMemo(() => {
+    return zoomLevels.reduce((acc, zoom) => {
+      acc[zoom] = 3 / zoom;
+      return acc;
+    }, {} as Record<number, number>);
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
     if (position.zoom >= 4) return;
     setPosition((pos) => ({ ...pos, zoom: pos.zoom * 2 }));
-  };
+  }, [position.zoom]);
 
-  const handleZoomOut = () => {
+  const handleZoomOut = useCallback(() => {
     if (position.zoom <= 1) return;
     setPosition((pos) => ({ ...pos, zoom: pos.zoom / 2 }));
-  };
+  }, [position.zoom]);
 
-  const handleMoveEnd = (position: any) => {
+  const handleMoveEnd = useCallback((position: any) => {
     setPosition(position);
-  };
+  }, []);
+
+  const scaledMarkers = useMemo(() => {
+    return markers.map((marker, index) => (
+      <Marker
+        key={index}
+        coordinates={marker.coordinates as [number, number]}
+        onMouseEnter={() => {
+          setTooltipContent(
+            `IP: ${marker.ip}<br/>Country: ${marker.country}<br/>ISP: ${marker.isp}`
+          );
+        }}
+        onMouseLeave={() => {
+          setTooltipContent("");
+        }}
+      >
+        <circle
+          r={markerSizes[position.zoom] || 3 / position.zoom}
+          fill={colorScale(index)}
+          stroke="#FFF"
+          strokeWidth={0.5 / position.zoom}
+          style={{
+            cursor: "pointer",
+            transition: "all 0.3s ease-in-out",
+          }}
+          data-tooltip-id="marker-tooltip"
+        />
+      </Marker>
+    ));
+  }, [markers, position.zoom, colorScale, markerSizes]);
 
   return (
     <div
-      className="border border-white max-h-[90vh] overflow-y-auto"
+      className="border border-l-white border-r-white border-t-white border-b-transparent "
       style={{
         width: "98%",
-        height: "90vh",
+        height: "92vh",
         background: "#111827",
         position: "relative",
       }}
@@ -65,6 +108,7 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         projection="geoMercator"
         projectionConfig={{
           scale: 130,
+          center: [0, 20],
         }}
       >
         <ZoomableGroup
@@ -72,42 +116,43 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
           center={position.coordinates}
           onMoveEnd={handleMoveEnd}
         >
-          <Geographies geography={geoUrl}>
+          <Geographies geography={countries}>
             {({ geographies }) =>
               geographies.map((geo) => (
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill="#2C3E50"
+                  fill="#1F2937"
+                  style={{
+                    default: { outline: "none" },
+                    hover: { outline: "none", fill: "#2C3E50" },
+                    pressed: { outline: "none" },
+                  }}
                   stroke="#EAEAEC"
                   strokeWidth={0.5}
                 />
               ))
             }
           </Geographies>
-          {markers.map((marker, index) => (
-            <Marker
-              key={index}
-              coordinates={marker.coordinates as [number, number]}
-              onMouseEnter={() => {
-                setTooltipContent(
-                  `IP: ${marker.ip}<br/>Country: ${marker.country}<br/>ISP: ${marker.isp}`
-                );
-              }}
-              onMouseLeave={() => {
-                setTooltipContent("");
-              }}
-            >
-              <circle
-                r={3 / position.zoom}
-                fill={colorScale(index)}
-                stroke="#FFF"
-                strokeWidth={0.5 / position.zoom}
-                style={{ cursor: "pointer" }}
-                data-tooltip-id="marker-tooltip"
-              />
-            </Marker>
-          ))}
+          <Geographies geography={states}>
+            {({ geographies }) =>
+              geographies.map((geo) => (
+                <Geography
+                  key={geo.rsmKey}
+                  geography={geo}
+                  fill="#1F2937"
+                  style={{
+                    default: { outline: "none" },
+                    hover: { outline: "none", fill: "#2C3E50" },
+                    pressed: { outline: "none" },
+                  }}
+                  stroke="#EAEAEC"
+                  strokeWidth={0.5}
+                />
+              ))
+            }
+          </Geographies>
+          {scaledMarkers}
         </ZoomableGroup>
       </ComposableMap>
       <div style={{ position: "absolute", right: "1rem", top: "1rem" }}>
