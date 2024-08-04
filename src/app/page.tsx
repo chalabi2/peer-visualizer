@@ -38,7 +38,7 @@ function Home() {
     ? searchParams.get("network")
     : "Akash";
 
-  const view = searchParams?.get("view") || "chart";
+  const view = searchParams?.get("view") || "map";
   const [selectedNetwork, setSelectedNetwork] = useState(initialNetwork);
 
   // Fetch peers whenever selectedNetwork changes
