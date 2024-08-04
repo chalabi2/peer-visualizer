@@ -25,18 +25,40 @@ const axiosInstance = axios.create({
   timeout: requestTimeout,
 });
 
+const parseSeiPeerInfo = (peerInfo: any): PeerInfo => {
+  const urlParts = peerInfo.url.split('@')[1].split(':');
+  const ip = urlParts[0];
+  const port = urlParts[1];
+  const rpcPort = port.slice(0, -1) + '7'; // Remove last digit and append '7'
+  
+  return {
+    ip: ip,
+    rpcAddress: `${ip}:${rpcPort}`,
+  };
+};
+
 // Updated fetchPeerInfo function to accept full URL
-const fetchPeerInfo = async (url: string): Promise<PeerInfo[]> => {
+const fetchPeerInfo = async (url: string, network?: string): Promise<PeerInfo[]> => {
   try {
     const { data } = await axiosInstance.get(url);
-    if (!data.result || !Array.isArray(data.result.peers)) {
+    console.log(`Raw response from ${url}:`, JSON.stringify(data, null, 2));
+
+    if (network?.toUpperCase() === 'SEI' && Array.isArray(data)) {
+      return data.map(parseSeiPeerInfo);
+    } else if (data.result && Array.isArray(data.result.peers)) {
+      return data.result.peers.map((peer: any) => ({
+        ip: peer.remote_ip,
+        rpcAddress: peer.node_info?.other?.rpc_address,
+      }));
+    } else if (data.peers && Array.isArray(data.peers)) {
+      return data.peers.map((peer: any) => ({
+        ip: peer.remote_ip || peer.addr,
+        rpcAddress: peer.node_info?.other?.rpc_address || peer.rpc_address,
+      }));
+    } else {
       console.error(`Unexpected API response structure from ${url}:`, data);
       return [];
     }
-    return data.result.peers.map((peer: any) => ({
-      ip: peer.remote_ip,
-      rpcAddress: peer.node_info.other.rpc_address,
-    }));
   } catch (error) {
     console.error(`Error fetching peer info from ${url}:`, error);
     return [];
@@ -97,7 +119,7 @@ const followRpcAddresses = async (initialPeerInfo: PeerInfo[], visited = new Set
         visited.add(urlToFetch);
 
         try {
-          const additionalPeers = await fetchPeerInfo(urlToFetch);
+          const additionalPeers = await fetchPeerInfo(urlToFetch, );
           allPeers = allPeers.concat(await followRpcAddresses(additionalPeers, visited));
         } catch (error) {
           console.error(`Error following rpc_address ${urlToFetch}:`, error);
@@ -113,9 +135,9 @@ const followRpcAddresses = async (initialPeerInfo: PeerInfo[], visited = new Set
 
 
 async function updateDatabaseWithPeerInfo(network: string, url: string) {
-    await dbConnect(); // Ensure connection to the database
+  await dbConnect();
 
-    const initialPeers = await fetchPeerInfo(url);
+  const initialPeers = await fetchPeerInfo(url, network);
     const allPeers = await followRpcAddresses(initialPeers, new Set());
     const uniqueIPs = [...new Set(allPeers.map(peer => peer.ip))];
     const peersWithGeo = await fetchGeoInfoBatch(uniqueIPs);
@@ -172,6 +194,16 @@ async function ensureDatabaseIsPopulated() {
   const networks = {
     Berachain: process.env.BERACHAIN_NET_INFO_URL,
     Evmos: process.env.EVMOS_NET_INFO_URL,
+    Akash: process.env.AKASH_NET_INFO_URL,
+    Canto: process.env.CANTO_NET_INFO_URL,
+    Osmosis: process.env.OSMOSIS_NET_INFO_URL,
+    Injective: process.env.INJECTIVE_NET_INFO_URL,
+    Celestia: process.env.CELESTIA_NET_INFO_URL,
+    Dymension: process.env.DYMENSION_NET_INFO_URL,
+    Gravity: process.env.GRAVITY_NET_INFO_URL,
+    Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
+    Sei: process.env.Sei_NET_INFO_URL,
+
   };
   
   async function scheduleNetworkUpdates() {

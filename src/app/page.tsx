@@ -1,7 +1,9 @@
 "use client";
+import MapView from "@/components/mapView";
 import { useSearchParams } from "next/navigation";
 
 import React, { useEffect, useState, Suspense } from "react";
+import { MapContainer } from "react-leaflet";
 
 import { ResponsiveContainer, PieChart, Pie, Tooltip, Cell } from "recharts";
 
@@ -9,6 +11,8 @@ interface IPeer {
   ip: string;
   country: string;
   isp: string;
+  lat: string;
+  lon: string;
 }
 
 interface IISPInfo {
@@ -20,8 +24,13 @@ interface ICountryInfo {
   isps: IISPInfo;
 }
 
-interface IGroupedPeers {
-  [country: string]: ICountryInfo; // Country name as key and country info as value
+export interface IGroupedPeers {
+  [country: string]: {
+    totalIPs: number;
+    isps: {
+      [isp: string]: Array<{ ip: string; lat: string; lon: string }>;
+    };
+  };
 }
 
 function Home() {
@@ -32,8 +41,6 @@ function Home() {
 
   const view = searchParams?.get("view") || "chart";
   const [selectedNetwork, setSelectedNetwork] = useState(initialNetwork);
-
-  // Your existing state and function declarations...
 
   // Fetch peers whenever selectedNetwork changes
   useEffect(() => {
@@ -49,10 +56,11 @@ function Home() {
   }, [searchParams]);
 
   const [groupedPeers, setGroupedPeers] = useState<IGroupedPeers>({});
-
+  console.log(groupedPeers);
   const [pieData, setPieData] = useState<any[]>([]);
   const [countryPieData, setCountryPieData] = useState<any[]>([]);
   const [totalFoundNodes, setTotalFoundNodes] = useState(0);
+
   const [countryWithMostNodes, setCountryWithMostNodes] = useState({
     name: "",
     count: 0,
@@ -86,10 +94,10 @@ function Home() {
     const data: IPeer[] = await response.json();
     if (Array.isArray(data)) {
       const grouped = data.reduce<IGroupedPeers>(
-        (acc, { ip, country, isp }) => {
+        (acc, { ip, country, isp, lat, lon }) => {
           if (!acc[country]) acc[country] = { totalIPs: 0, isps: {} };
           if (!acc[country].isps[isp]) acc[country].isps[isp] = [];
-          acc[country].isps[isp].push(ip);
+          acc[country].isps[isp].push({ ip, lat, lon });
           acc[country].totalIPs += 1;
           return acc;
         },
@@ -282,9 +290,20 @@ function Home() {
 
   const renderView = () => {
     switch (view) {
+      case "map":
+        return (
+          <div className="mt-4 w-full ">
+            <div className="mb-4">
+              <span className="text-white font-extrabold text-4xl">
+                {selectedNetwork}
+              </span>
+            </div>
+            <MapView groupedPeers={groupedPeers} />
+          </div>
+        );
       case "table":
         return (
-          <div className="mt-8 w-full max-w-4xl ">
+          <div className="mt-8 w-full h-screen max-w-4xl ">
             <div className="mb-4">
               <span className="text-white font-extrabold text-4xl">
                 {selectedNetwork}
@@ -319,7 +338,7 @@ function Home() {
                                     ? isp
                                     : ""}
                                 </td>
-                                <td className="border px-4 py-2">{ip}</td>
+                                <td className="border px-4 py-2">{ip.ip}</td>
                               </tr>
                             )),
                           ]
@@ -376,6 +395,7 @@ function Home() {
                 />
               </PieChart>
             </ResponsiveContainer>
+
             <div className="bottom-4 absolute">
               <h3 className="text-xl font-semibold">Statistics</h3>
               <h4 className="text-md font-semibold">
