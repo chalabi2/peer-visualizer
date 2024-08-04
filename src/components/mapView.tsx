@@ -55,7 +55,7 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     () =>
       scaleLinear<string>()
         .domain([0, Object.keys(groupedPeers).length])
-        .range(["#d4b3ffcf", "#001affc6"]),
+        .range(["#d4b3ffbb", "#001affbb"]),
     [groupedPeers]
   );
 
