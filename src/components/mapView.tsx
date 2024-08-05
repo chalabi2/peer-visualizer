@@ -10,7 +10,7 @@ import {
 import { scaleLinear } from "d3-scale";
 import { Tooltip } from "react-tooltip";
 import { IGroupedPeers } from "@/app/page";
-import { geoCentroid } from "d3-geo";
+import { geoBounds, geoCentroid } from "d3-geo";
 import { set } from "mongoose";
 
 const countries = "/countries50.geojson";
@@ -25,6 +25,41 @@ interface IMarker {
   coordinates: [number, number];
 }
 
+const BackgroundRect = ({
+  text,
+  fontSize,
+  padding,
+}: {
+  text: string;
+  fontSize: number;
+  padding: number;
+}) => {
+  const ref = React.useRef();
+  const [width, setWidth] = React.useState(0);
+
+  React.useEffect(() => {
+    if (ref.current) {
+      setWidth(ref?.current?.getBBox().width);
+    }
+  }, [text]);
+
+  return (
+    <>
+      <text ref={ref} fontSize={fontSize} style={{ visibility: "hidden" }}>
+        {text}
+      </text>
+      <rect
+        x={-(width / 2 + padding / 2)}
+        y={-7}
+        width={width + padding}
+        height={15}
+        fill="rgba(0, 0, 0, 0.928)"
+        rx={4}
+      />
+    </>
+  );
+};
+
 const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   const [position, setPosition] = useState({
     coordinates: [0, 0] as [number, number],
@@ -36,6 +71,17 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   const [focusedMarker, setFocusedMarker] = useState<IMarker | null>(null);
   const [showCard, setShowCard] = useState(false);
   const [selectedGeo, setSelectedGeo] = useState<string | null>(null);
+  const [currentAnnotation, setCurrentAnnotation] = useState<{
+    coordinates: [number, number];
+    name: string;
+    fontSize: number;
+  } | null>(null);
+
+  const [currentStateAnnotation, setCurrentStateAnnotation] = useState<{
+    coordinates: [number, number];
+    name: string;
+    fontSize: number;
+  } | null>(null);
 
   const markers = useMemo(() => {
     if (!groupedPeers) return [];
@@ -58,6 +104,14 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         .range(["#d4b3ffbb", "#001affbb"]),
     [groupedPeers]
   );
+
+  const nodeCountsByLocation = useMemo(() => {
+    const counts: { [key: string]: number } = {};
+    markers.forEach((marker) => {
+      counts[marker.country] = (counts[marker.country] || 0) + 1;
+    });
+    return counts;
+  }, [markers]);
 
   const markerSizes = useMemo(() => {
     return zoomLevels.reduce((acc, zoom) => {
@@ -119,6 +173,14 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     setSelectedGeo(geo.properties.name);
   }, []);
 
+  const calculateFontSize = (geo: any) => {
+    const [[x0, y0], [x1, y1]] = geoBounds(geo);
+    const width = Math.abs(x1 - x0);
+    const height = Math.abs(y1 - y0);
+    const area = width * height;
+    return Math.max(Math.min(Math.sqrt(area) * 0.1, 14), 8); // Adjust these values as needed
+  };
+
   const scaledMarkers = useMemo(() => {
     return markers.map((marker, index) => (
       <Marker key={index} coordinates={marker.coordinates}>
@@ -159,6 +221,11 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     setSelectedGeo(null);
   }, []);
 
+  const handleCloseCard = () => {
+    setShowCard(false);
+    setSelectedMarker(null);
+  };
+
   return (
     <div
       className="border border-l-white border-r-white border-t-white border-b-transparent "
@@ -183,51 +250,153 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         >
           <Geographies geography={countries}>
             {({ geographies }) =>
-              geographies.map((geo) => (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  fill={"#1F2937"}
-                  style={{
-                    default: { outline: "none" },
-                    hover: {
-                      outline: "none",
-                      fill: "#2C3E50",
-                      cursor: "pointer",
-                    },
-                    pressed: { outline: "none", fill: "#4CAF50" },
-                  }}
-                  stroke="#EAEAEC"
-                  strokeWidth={0.2}
-                  onClick={() => handleCountryClick(geo)}
-                />
-              ))
+              geographies.map((geo) => {
+                const countryName = geo?.properties?.NAME;
+                const nodeCount = nodeCountsByLocation[countryName] || 0;
+                return (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    fill={"#1F2937"}
+                    style={{
+                      default: { outline: "none" },
+                      hover: {
+                        outline: "none",
+                        fill: "#2C3E50",
+                        cursor: "pointer",
+                      },
+                      pressed: { outline: "none", fill: "#4CAF50" },
+                    }}
+                    stroke="#EAEAEC"
+                    strokeWidth={0.2}
+                    onClick={() => handleCountryClick(geo)}
+                    onMouseEnter={() => {
+                      const centroid = geoCentroid(geo);
+                      const fontSize = calculateFontSize(geo);
+                      setCurrentAnnotation({
+                        coordinates: centroid,
+                        name: `${geo.properties.NAME}`,
+                        fontSize,
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      setCurrentAnnotation(null);
+                    }}
+                  />
+                );
+              })
             }
           </Geographies>
-          <Geographies geography={states}>
-            {({ geographies }) =>
-              geographies.map((geo) => (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  fill={"#1F2937"}
-                  style={{
-                    default: { outline: "none" },
-                    hover: {
-                      outline: "none",
-                      fill: "#2C3E50",
-                      cursor: "pointer",
-                    },
-                    pressed: { outline: "none" },
-                  }}
-                  stroke="#EAEAEC"
-                  strokeWidth={0.2}
-                  onClick={() => handleStateClick(geo)}
-                />
-              ))
-            }
-          </Geographies>
+
+          {position.zoom >= 2 && (
+            <Geographies geography={states}>
+              {({ geographies }) =>
+                geographies.map((geo) => (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    fill={"#1F2937"}
+                    style={{
+                      default: { outline: "none" },
+                      hover: {
+                        outline: "none",
+                        fill: "#2C3E50",
+                        cursor: "pointer",
+                      },
+                      pressed: { outline: "none", stroke: "#0080ff" },
+                    }}
+                    stroke="#EAEAEC"
+                    strokeWidth={0.2}
+                    onClick={() => handleStateClick(geo)}
+                    onMouseEnter={() => {
+                      console.log(geo);
+                      const centroid = geoCentroid(geo);
+                      const fontSize = calculateFontSize(geo);
+                      setCurrentStateAnnotation({
+                        coordinates: centroid,
+                        name: `${geo.properties.name}`,
+                        fontSize,
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      setCurrentStateAnnotation(null);
+                    }}
+                  />
+                ))
+              }
+            </Geographies>
+          )}
+
           {scaledMarkers}
+
+          {currentAnnotation && position.zoom <= 2 && (
+            <Annotation
+              subject={currentAnnotation.coordinates}
+              dx={0}
+              dy={-7}
+              connectorProps={{
+                stroke: "transparent",
+                strokeWidth: 0,
+              }}
+              z={99}
+            >
+              <g pointerEvents="none">
+                <BackgroundRect
+                  text={currentAnnotation.name}
+                  fontSize={8}
+                  padding={10}
+                />
+                <text
+                  x={0}
+                  y={1}
+                  textAnchor="middle"
+                  alignmentBaseline="middle"
+                  fill="#8dc6ff"
+                  fontSize={8}
+                  style={{ pointerEvents: "none" }}
+                >
+                  {currentAnnotation.name}
+                </text>
+              </g>
+            </Annotation>
+          )}
+
+          {currentStateAnnotation &&
+            position.zoom >= 2 &&
+            position.zoom < 8 && (
+              <Annotation
+                subject={currentStateAnnotation.coordinates}
+                dx={0}
+                dy={-4}
+                connectorProps={{
+                  stroke: "transparent",
+                  strokeWidth: 0,
+                }}
+                z={99}
+              >
+                <g pointerEvents="none">
+                  <rect
+                    x={-20}
+                    y={-9}
+                    width={40}
+                    height={8}
+                    fill="rgba(0, 0, 0, 0.859)"
+                    rx={2}
+                  />
+                  <text
+                    x={0}
+                    y={-5}
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
+                    fill="#8dc6ff"
+                    fontSize={5}
+                    style={{ pointerEvents: "none" }}
+                  >
+                    {currentStateAnnotation.name}
+                  </text>
+                </g>
+              </Annotation>
+            )}
         </ZoomableGroup>
       </ComposableMap>
 
@@ -255,6 +424,7 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         </button>
       </div>
       <Tooltip id="marker-tooltip" html={tooltipContent} />
+
       {showCard && focusedMarker && (
         <div
           style={{
@@ -270,7 +440,9 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
           <p>IP: {focusedMarker.ip}</p>
           <p>Country: {focusedMarker.country}</p>
           <p>ISP: {focusedMarker.isp}</p>
-          <button onClick={() => setShowCard(false)}>Close</button>
+          <button className="absolute top-1 right-4 " onClick={handleCloseCard}>
+            X
+          </button>
         </div>
       )}
     </div>

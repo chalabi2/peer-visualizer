@@ -41,3 +41,7 @@ body {
 .recharts-polygon:focus {
   outline: none;
 }
+
+#geo-tooltip {
+  pointer-events: none;
+}
