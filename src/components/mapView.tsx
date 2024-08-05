@@ -1,4 +1,10 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import {
   ComposableMap,
   Geographies,
@@ -34,12 +40,13 @@ const BackgroundRect = ({
   fontSize: number;
   padding: number;
 }) => {
-  const ref = React.useRef();
-  const [width, setWidth] = React.useState(0);
+  const ref = useRef<SVGTextElement>(null);
+  const [width, setWidth] = useState(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (ref.current) {
-      setWidth(ref?.current?.getBBox().width);
+      const bbox = ref.current.getBBox();
+      setWidth(bbox.width);
     }
   }, [text]);
 
@@ -185,6 +192,7 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     return markers.map((marker, index) => (
       <Marker key={index} coordinates={marker.coordinates}>
         <circle
+          pointerEvents={position.zoom >= 2 ? "all" : "none"}
           r={markerSizes[position.zoom] || 3 / Math.sqrt(position.zoom)}
           fill={
             selectedMarker && selectedMarker.ip === marker.ip
@@ -423,7 +431,9 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
           -
         </button>
       </div>
-      <Tooltip id="marker-tooltip" html={tooltipContent} />
+      {position.zoom > 2 && (
+        <Tooltip id="marker-tooltip" html={tooltipContent} />
+      )}
 
       {showCard && focusedMarker && (
         <div
