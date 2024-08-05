@@ -12,7 +12,7 @@
     "@geo-maps/earth-lands-10km": "^0.6.0",
     "@types/d3-hexbin": "^0.2.5",
     "@types/react-simple-maps": "^3.0.6",
-    "chain-registry": "^1.28.0",
+    "chain-registry": "^1.63.50",
     "d3-geo": "^3.1.1",
     "d3-hexbin": "^0.2.2",
     "d3-scale": "^4.0.2",

@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { chains } from "chain-registry";
 
 const SideNav = () => {
@@ -53,6 +53,8 @@ const SideNav = () => {
     { name: "Osmosis", url: "#Osmosis" },
     { name: "Quicksilver", url: "#Quicksilver" },
     { name: "Sei", url: "#Sei" },
+    { name: "Cosmos", url: "#Cosmos" },
+    { name: "Althea", url: "#Althea" },
   ];
 
   const handleTableView = () => {
@@ -77,6 +79,12 @@ const SideNav = () => {
   const isActiveView = (viewName: string) => {
     return searchParams?.get("view") === viewName;
   };
+
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredNetworks = networks.filter((network) =>
+    network.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <>
@@ -198,8 +206,33 @@ const SideNav = () => {
               </a>
             </li>
           </ul>
+
           <ul className="pt-5 mt-5 space-y-2 border-t border-gray-200 dark:border-gray-700">
-            {networks.map((network, index) => {
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 pb-3 -mb-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  className="w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="Search for a chain"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg
+                    className="h-5 w-5 text-gray-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            {filteredNetworks.map((network, index) => {
               const modifiedChainName = convertChainName(
                 network.name.toLocaleLowerCase()
               );

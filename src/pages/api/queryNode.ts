@@ -25,6 +25,23 @@ const axiosInstance = axios.create({
   timeout: requestTimeout,
 });
 
+const networks = {
+  Berachain: process.env.BERACHAIN_NET_INFO_URL,
+  Evmos: process.env.EVMOS_NET_INFO_URL,
+  Akash: process.env.AKASH_NET_INFO_URL,
+  Canto: process.env.CANTO_NET_INFO_URL,
+  Osmosis: process.env.OSMOSIS_NET_INFO_URL,
+  Injective: process.env.INJECTIVE_NET_INFO_URL,
+  Celestia: process.env.CELESTIA_NET_INFO_URL,
+  Dymension: process.env.DYMENSION_NET_INFO_URL,
+  Gravity: process.env.GRAVITY_NET_INFO_URL,
+  Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
+  Sei: process.env.SEI_NET_INFO_URL,
+  Cosmos: process.env.COSMOS_NET_INFO_URL,
+  Althea: process.env.ALTHEA_NET_INFO_URL,
+};
+
+
 const parseSeiPeerInfo = (peerInfo: any): PeerInfo => {
   const urlParts = peerInfo.url.split('@')[1].split(':');
   const ip = urlParts[0];
@@ -162,20 +179,7 @@ async function ensureDatabaseIsPopulated() {
   await dbConnect();
 
   // Define networks and their respective URLs from the environment variables
-  const networks = {
-      Berachain: process.env.BERACHAIN_NET_INFO_URL,
-      Evmos: process.env.EVMOS_NET_INFO_URL,
-      Akash: process.env.AKASH_NET_INFO_URL,
-      Canto: process.env.CANTO_NET_INFO_URL,
-      Osmosis: process.env.OSMOSIS_NET_INFO_URL,
-      Injective: process.env.INJECTIVE_NET_INFO_URL,
-      Celestia: process.env.CELESTIA_NET_INFO_URL,
-      Dymension: process.env.DYMENSION_NET_INFO_URL,
-      Gravity: process.env.GRAVITY_NET_INFO_URL,
-      Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
-      SEI: process.env.SEI_NET_INFO_URL,
-  };
-
+  
   // Iterate through each network to check and populate data if necessary
   for (const [network, url] of Object.entries(networks)) {
       const count = await PeerInfo.countDocuments({ network });
@@ -191,40 +195,14 @@ async function ensureDatabaseIsPopulated() {
   // Run the check once at the start
   ensureDatabaseIsPopulated();
   // Schedule the database update to run every 12 hours
-  const networks = {
-    Berachain: process.env.BERACHAIN_NET_INFO_URL,
-    Evmos: process.env.EVMOS_NET_INFO_URL,
-    Akash: process.env.AKASH_NET_INFO_URL,
-    Canto: process.env.CANTO_NET_INFO_URL,
-    Osmosis: process.env.OSMOSIS_NET_INFO_URL,
-    Injective: process.env.INJECTIVE_NET_INFO_URL,
-    Celestia: process.env.CELESTIA_NET_INFO_URL,
-    Dymension: process.env.DYMENSION_NET_INFO_URL,
-    Gravity: process.env.GRAVITY_NET_INFO_URL,
-    Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
-    Sei: process.env.Sei_NET_INFO_URL,
 
-  };
   
   async function scheduleNetworkUpdates() {
     // Ensure database is initially populated for all networks
     await ensureDatabaseIsPopulated();
   
     // Define networks and their respective URLs from the environment variables
-    const networks = {
-      Berachain: process.env.BERACHAIN_NET_INFO_URL,
-      Evmos: process.env.EVMOS_NET_INFO_URL,
-      Akash: process.env.AKASH_NET_INFO_URL,
-      Canto: process.env.CANTO_NET_INFO_URL,
-      Osmosis: process.env.OSMOSIS_NET_INFO_URL,
-      Injective: process.env.INJECTIVE_NET_INFO_URL,
-      Celestia: process.env.CELESTIA_NET_INFO_URL,
-      Dymension: process.env.DYMENSION_NET_INFO_URL,
-      Gravity: process.env.GRAVITY_NET_INFO_URL,
-      Quicksilver: process.env.QUICKSILVER_NET_INFO_URL,
-      Sei: process.env.Sei_NET_INFO_URL,
 
-    };
   
     // Schedule database updates for each network
     Object.entries(networks).forEach(([network, url]) => {

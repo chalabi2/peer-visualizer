@@ -233,13 +233,34 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     setShowCard(false);
     setSelectedMarker(null);
   };
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [mapDimensions, setMapDimensions] = useState({
+    width: 800,
+    height: 600,
+  });
 
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (mapContainerRef.current) {
+        setMapDimensions({
+          width: mapContainerRef.current.offsetWidth,
+          height: mapContainerRef.current.offsetHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener("resize", updateDimensions);
+
+    return () => window.removeEventListener("resize", updateDimensions);
+  }, []);
   return (
     <div
-      className="border border-l-white border-r-white border-t-white border-b-transparent "
+      ref={mapContainerRef}
+      className="border border-white overflow-hidden"
       style={{
         width: "98%",
-        height: "92vh",
+        height: "89vh",
         background: "#111827",
         position: "relative",
       }}
@@ -247,20 +268,26 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{
-          scale: 130,
-          center: [0, 20],
+          scale: mapDimensions.width / 6,
+          center: [0, 30],
         }}
+        width={mapDimensions.width}
+        height={mapDimensions.height}
       >
         <ZoomableGroup
           zoom={position.zoom}
           center={position.coordinates}
           onMoveEnd={handleMoveEnd}
+          translateExtent={[
+            [-33, -mapDimensions.height + 440],
+            [mapDimensions.width + 33, mapDimensions.height + 409],
+          ]}
         >
           <Geographies geography={countries}>
             {({ geographies }) =>
               geographies.map((geo) => {
                 const countryName = geo?.properties?.NAME;
-                const nodeCount = nodeCountsByLocation[countryName] || 0;
+
                 return (
                   <Geography
                     key={geo.rsmKey}
@@ -276,7 +303,7 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
                       pressed: { outline: "none", fill: "#4CAF50" },
                     }}
                     stroke="#EAEAEC"
-                    strokeWidth={0.2}
+                    strokeWidth={position.zoom <= 4 ? 0.2 : 0.1}
                     onClick={() => handleCountryClick(geo)}
                     onMouseEnter={() => {
                       const centroid = geoCentroid(geo);
@@ -314,10 +341,9 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
                       pressed: { outline: "none", stroke: "#0080ff" },
                     }}
                     stroke="#EAEAEC"
-                    strokeWidth={0.2}
+                    strokeWidth={position.zoom <= 4 ? 0.2 : 0.1}
                     onClick={() => handleStateClick(geo)}
                     onMouseEnter={() => {
-                      console.log(geo);
                       const centroid = geoCentroid(geo);
                       const fontSize = calculateFontSize(geo);
                       setCurrentStateAnnotation({

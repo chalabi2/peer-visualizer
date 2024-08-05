@@ -291,7 +291,7 @@ function Home() {
     switch (view) {
       case "map":
         return (
-          <div className="mt-4 w-full min-w-64 ">
+          <div className=" -mt-[0.8rem] w-full min-w-64 ">
             <div className="mb-4 flex flex-row justify-start gap-24 items-center">
               <span className="text-white font-extrabold text-4xl">
                 {selectedNetwork}
