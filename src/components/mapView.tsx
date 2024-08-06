@@ -4,7 +4,6 @@ import React, {
   useCallback,
   useEffect,
   useRef,
-  useReducer,
 } from "react";
 import {
   ComposableMap,
@@ -18,7 +17,6 @@ import { scaleLinear } from "d3-scale";
 import { Tooltip } from "react-tooltip";
 import { IGroupedPeers } from "@/app/page";
 import { geoBounds, geoCentroid } from "d3-geo";
-import { debounce } from "lodash";
 
 const zoomLevels = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64];
 
@@ -29,58 +27,12 @@ interface IMarker {
   coordinates: [number, number];
 }
 
-interface IPosition {
-  coordinates: [number, number];
-  zoom: number;
-}
-
-const initialPosition: IPosition = {
-  coordinates: [0, 0],
-  zoom: 1,
-};
-
-type PositionAction =
-  | { type: "ZOOM_IN" }
-  | { type: "ZOOM_OUT" }
-  | { type: "MOVE"; payload: IPosition }
-  | { type: "RESET" }
-  | { type: "SET"; payload: IPosition };
-
-const positionReducer = (
-  state: IPosition,
-  action: PositionAction
-): IPosition => {
-  switch (action.type) {
-    case "ZOOM_IN": {
-      const nextZoomIndex = zoomLevels.findIndex((z) => z > state.zoom);
-      return {
-        ...state,
-        zoom: nextZoomIndex !== -1 ? zoomLevels[nextZoomIndex] : state.zoom,
-      };
-    }
-    case "ZOOM_OUT": {
-      const nextZoomIndex = zoomLevels.findIndex((z) => z >= state.zoom) - 1;
-      return {
-        ...state,
-        zoom: nextZoomIndex >= 0 ? zoomLevels[nextZoomIndex] : state.zoom,
-      };
-    }
-    case "MOVE":
-      return action.payload;
-    case "RESET":
-      return initialPosition;
-    case "SET":
-      return action.payload;
-    default:
-      return state;
-  }
-};
-
 const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
-  const [position, dispatchPosition] = useReducer(
-    positionReducer,
-    initialPosition
-  );
+  const [position, setPosition] = useState({
+    coordinates: [0, 0] as [number, number],
+    zoom: 1,
+  });
+
   const [tooltipContent, setTooltipContent] = useState("");
   const [selectedMarker, setSelectedMarker] = useState<IMarker | null>(null);
   const [focusedMarker, setFocusedMarker] = useState<IMarker | null>(null);
@@ -116,16 +68,27 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    dispatchPosition({ type: "ZOOM_IN" });
+    setPosition((prev) => {
+      const nextZoomIndex = zoomLevels.findIndex((z) => z > prev.zoom);
+      return {
+        ...prev,
+        zoom: nextZoomIndex !== -1 ? zoomLevels[nextZoomIndex] : prev.zoom,
+      };
+    });
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    dispatchPosition({ type: "ZOOM_OUT" });
+    setPosition((prev) => {
+      const nextZoomIndex = zoomLevels.findIndex((z) => z >= prev.zoom) - 1;
+      return {
+        ...prev,
+        zoom: nextZoomIndex >= 0 ? zoomLevels[nextZoomIndex] : prev.zoom,
+      };
+    });
   }, []);
-
   const handleMoveEnd = useCallback(
     (pos: { coordinates: [number, number]; zoom: number }) => {
-      dispatchPosition({ type: "MOVE", payload: pos });
+      setPosition(pos);
     },
     []
   );
@@ -133,13 +96,11 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   const handleMarkerClick = useCallback((marker: IMarker) => {
     setFocusedMarker(marker);
     setSelectedMarker(marker);
-    dispatchPosition({
-      type: "SET",
-      payload: {
-        coordinates: marker.coordinates,
-        zoom: zoomLevels[zoomLevels.length - 1],
-      },
-    });
+    setPosition((prevPosition) => ({
+      ...prevPosition,
+      coordinates: marker.coordinates,
+      zoom: zoomLevels[zoomLevels.length - 1],
+    }));
     setShowCard(true);
   }, []);
 
@@ -177,14 +138,16 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   }, [markers, position.zoom, markerSizes, handleMarkerClick, selectedMarker]);
 
   const handleRecenter = useCallback(() => {
-    dispatchPosition({ type: "RESET" });
+    setPosition({
+      coordinates: [0, 0],
+      zoom: 1,
+    });
   }, []);
 
   const handleCloseCard = () => {
     setShowCard(false);
     setSelectedMarker(null);
   };
-
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapDimensions, setMapDimensions] = useState({
     width: 800,
@@ -214,12 +177,9 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         Math.abs(curr - zoom) < Math.abs(prev - zoom) ? curr : prev
       );
 
-      dispatchPosition({
-        type: "SET",
-        payload: {
-          coordinates: centroid as [number, number],
-          zoom: closestZoom,
-        },
+      setPosition({
+        coordinates: centroid as [number, number],
+        zoom: closestZoom,
       });
       setShowCard(false);
       setFocusedMarker(null);
@@ -239,12 +199,9 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
         0.9 / Math.max(dx / mapDimensions.width, dy / mapDimensions.height)
       );
 
-      dispatchPosition({
-        type: "SET",
-        payload: {
-          coordinates: centroid as [number, number],
-          zoom: zoom,
-        },
+      setPosition({
+        coordinates: centroid as [number, number],
+        zoom: zoom,
       });
       setShowCard(false);
       setFocusedMarker(null);
@@ -254,14 +211,14 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   );
 
   useEffect(() => {
-    const updateDimensions = debounce(() => {
+    const updateDimensions = () => {
       if (mapContainerRef.current) {
         setMapDimensions({
           width: mapContainerRef.current.offsetWidth,
           height: mapContainerRef.current.offsetHeight,
         });
       }
-    }, 200);
+    };
 
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
