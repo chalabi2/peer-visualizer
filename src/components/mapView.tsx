@@ -268,6 +268,10 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
             ? 20
             : 0 || (isCountry && geo?.properties?.NAME === "Canada")
             ? -60
+            : 0 || (isCountry && geo?.properties?.NAME === "New Zealand")
+            ? -20
+            : 0 || (isCountry && geo?.properties?.NAME === "Fiji")
+            ? -10
             : 0
         }
         dy={
@@ -277,6 +281,8 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
               (isCountry &&
                 geo?.properties?.NAME === "United States of America")
             ? 30
+            : 0 || (isCountry && geo?.properties?.NAME === "Fiji")
+            ? 10
             : 0
         }
         connectorProps={{
