@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useEffect,
   useRef,
+  useReducer,
 } from "react";
 import {
   ComposableMap,
@@ -17,12 +18,9 @@ import { scaleLinear } from "d3-scale";
 import { Tooltip } from "react-tooltip";
 import { IGroupedPeers } from "@/app/page";
 import { geoBounds, geoCentroid } from "d3-geo";
-import { set } from "mongoose";
+import { debounce } from "lodash";
 
-const countries = "/countries50.geojson";
-const states = "/states.geojson";
-
-const zoomLevels = [1, 2, 4, 8, 16];
+const zoomLevels = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64];
 
 interface IMarker {
   ip: string;
@@ -31,64 +29,62 @@ interface IMarker {
   coordinates: [number, number];
 }
 
-const BackgroundRect = ({
-  text,
-  fontSize,
-  padding,
-}: {
-  text: string;
-  fontSize: number;
-  padding: number;
-}) => {
-  const ref = useRef<SVGTextElement>(null);
-  const [width, setWidth] = useState(0);
+interface IPosition {
+  coordinates: [number, number];
+  zoom: number;
+}
 
-  useEffect(() => {
-    if (ref.current) {
-      const bbox = ref.current.getBBox();
-      setWidth(bbox.width);
+const initialPosition: IPosition = {
+  coordinates: [0, 0],
+  zoom: 1,
+};
+
+type PositionAction =
+  | { type: "ZOOM_IN" }
+  | { type: "ZOOM_OUT" }
+  | { type: "MOVE"; payload: IPosition }
+  | { type: "RESET" }
+  | { type: "SET"; payload: IPosition };
+
+const positionReducer = (
+  state: IPosition,
+  action: PositionAction
+): IPosition => {
+  switch (action.type) {
+    case "ZOOM_IN": {
+      const nextZoomIndex = zoomLevels.findIndex((z) => z > state.zoom);
+      return {
+        ...state,
+        zoom: nextZoomIndex !== -1 ? zoomLevels[nextZoomIndex] : state.zoom,
+      };
     }
-  }, [text]);
-
-  return (
-    <>
-      <text ref={ref} fontSize={fontSize} style={{ visibility: "hidden" }}>
-        {text}
-      </text>
-      <rect
-        x={-(width / 2 + padding / 2)}
-        y={-7}
-        width={width + padding}
-        height={15}
-        fill="rgba(0, 0, 0, 0.928)"
-        rx={4}
-      />
-    </>
-  );
+    case "ZOOM_OUT": {
+      const nextZoomIndex = zoomLevels.findIndex((z) => z >= state.zoom) - 1;
+      return {
+        ...state,
+        zoom: nextZoomIndex >= 0 ? zoomLevels[nextZoomIndex] : state.zoom,
+      };
+    }
+    case "MOVE":
+      return action.payload;
+    case "RESET":
+      return initialPosition;
+    case "SET":
+      return action.payload;
+    default:
+      return state;
+  }
 };
 
 const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
-  const [position, setPosition] = useState({
-    coordinates: [0, 0] as [number, number],
-    zoom: 1,
-  });
-
+  const [position, dispatchPosition] = useReducer(
+    positionReducer,
+    initialPosition
+  );
   const [tooltipContent, setTooltipContent] = useState("");
   const [selectedMarker, setSelectedMarker] = useState<IMarker | null>(null);
   const [focusedMarker, setFocusedMarker] = useState<IMarker | null>(null);
   const [showCard, setShowCard] = useState(false);
-  const [selectedGeo, setSelectedGeo] = useState<string | null>(null);
-  const [currentAnnotation, setCurrentAnnotation] = useState<{
-    coordinates: [number, number];
-    name: string;
-    fontSize: number;
-  } | null>(null);
-
-  const [currentStateAnnotation, setCurrentStateAnnotation] = useState<{
-    coordinates: [number, number];
-    name: string;
-    fontSize: number;
-  } | null>(null);
 
   const markers = useMemo(() => {
     if (!groupedPeers) return [];
@@ -112,14 +108,6 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
     [groupedPeers]
   );
 
-  const nodeCountsByLocation = useMemo(() => {
-    const counts: { [key: string]: number } = {};
-    markers.forEach((marker) => {
-      counts[marker.country] = (counts[marker.country] || 0) + 1;
-    });
-    return counts;
-  }, [markers]);
-
   const markerSizes = useMemo(() => {
     return zoomLevels.reduce((acc, zoom) => {
       acc[zoom] = Math.max(0.5, 3 / Math.sqrt(zoom));
@@ -128,65 +116,32 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    if (position.zoom >= zoomLevels[zoomLevels.length - 1]) return;
-    setPosition((pos) => ({ ...pos, zoom: pos.zoom * 2 }));
-  }, [position.zoom]);
+    dispatchPosition({ type: "ZOOM_IN" });
+  }, []);
 
   const handleZoomOut = useCallback(() => {
-    if (position.zoom <= zoomLevels[0]) return;
-    setPosition((pos) => ({ ...pos, zoom: pos.zoom / 2 }));
-  }, [position.zoom]);
+    dispatchPosition({ type: "ZOOM_OUT" });
+  }, []);
 
   const handleMoveEnd = useCallback(
     (pos: { coordinates: [number, number]; zoom: number }) => {
-      setPosition(pos);
+      dispatchPosition({ type: "MOVE", payload: pos });
     },
     []
   );
 
   const handleMarkerClick = useCallback((marker: IMarker) => {
-    setSelectedGeo(null);
     setFocusedMarker(marker);
     setSelectedMarker(marker);
-    setPosition((prevPosition) => ({
-      ...prevPosition,
-      coordinates: marker.coordinates,
-      zoom: zoomLevels[zoomLevels.length - 1],
-    }));
+    dispatchPosition({
+      type: "SET",
+      payload: {
+        coordinates: marker.coordinates,
+        zoom: zoomLevels[zoomLevels.length - 1],
+      },
+    });
     setShowCard(true);
   }, []);
-
-  const handleCountryClick = useCallback((geo: any) => {
-    const centroid = geoCentroid(geo);
-    setPosition({
-      coordinates: centroid as [number, number],
-      zoom: 2,
-    });
-    setShowCard(false);
-    setFocusedMarker(null);
-    setSelectedMarker(null);
-    setSelectedGeo(geo.properties.name);
-  }, []);
-
-  const handleStateClick = useCallback((geo: any) => {
-    const centroid = geoCentroid(geo);
-    setPosition({
-      coordinates: centroid as [number, number],
-      zoom: 4,
-    });
-    setShowCard(false);
-    setFocusedMarker(null);
-    setSelectedMarker(null);
-    setSelectedGeo(geo.properties.name);
-  }, []);
-
-  const calculateFontSize = (geo: any) => {
-    const [[x0, y0], [x1, y1]] = geoBounds(geo);
-    const width = Math.abs(x1 - x0);
-    const height = Math.abs(y1 - y0);
-    const area = width * height;
-    return Math.max(Math.min(Math.sqrt(area) * 0.1, 14), 8); // Adjust these values as needed
-  };
 
   const scaledMarkers = useMemo(() => {
     return markers.map((marker, index) => (
@@ -222,38 +177,172 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
   }, [markers, position.zoom, markerSizes, handleMarkerClick, selectedMarker]);
 
   const handleRecenter = useCallback(() => {
-    setPosition({
-      coordinates: [0, 0],
-      zoom: 1,
-    });
-    setSelectedGeo(null);
+    dispatchPosition({ type: "RESET" });
   }, []);
 
   const handleCloseCard = () => {
     setShowCard(false);
     setSelectedMarker(null);
   };
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapDimensions, setMapDimensions] = useState({
     width: 800,
     height: 600,
   });
 
+  const handleCountryClick = useCallback(
+    (geo: any) => {
+      const centroid = geoCentroid(geo);
+      const bounds = geoBounds(geo);
+      const dx = bounds[1][0] - bounds[0][0];
+      const dy = bounds[1][1] - bounds[0][1];
+      const area = dx * dy;
+
+      const largeCountryThreshold = 100;
+      const maxZoomForLargeCountries = 2;
+      let zoom =
+        0.9 / Math.max(dx / mapDimensions.width, dy / mapDimensions.height);
+
+      if (area > largeCountryThreshold) {
+        zoom = Math.min(zoom, maxZoomForLargeCountries);
+      } else {
+        zoom = Math.min(zoom, 8);
+      }
+
+      const closestZoom = zoomLevels.reduce((prev, curr) =>
+        Math.abs(curr - zoom) < Math.abs(prev - zoom) ? curr : prev
+      );
+
+      dispatchPosition({
+        type: "SET",
+        payload: {
+          coordinates: centroid as [number, number],
+          zoom: closestZoom,
+        },
+      });
+      setShowCard(false);
+      setFocusedMarker(null);
+      setSelectedMarker(null);
+    },
+    [mapDimensions]
+  );
+
+  const handleStateClick = useCallback(
+    (geo: any) => {
+      const centroid = geoCentroid(geo);
+      const bounds = geoBounds(geo);
+      const dx = bounds[1][0] - bounds[0][0];
+      const dy = bounds[1][1] - bounds[0][1];
+      const zoom = Math.min(
+        16,
+        0.9 / Math.max(dx / mapDimensions.width, dy / mapDimensions.height)
+      );
+
+      dispatchPosition({
+        type: "SET",
+        payload: {
+          coordinates: centroid as [number, number],
+          zoom: zoom,
+        },
+      });
+      setShowCard(false);
+      setFocusedMarker(null);
+      setSelectedMarker(null);
+    },
+    [mapDimensions]
+  );
+
   useEffect(() => {
-    const updateDimensions = () => {
+    const updateDimensions = debounce(() => {
       if (mapContainerRef.current) {
         setMapDimensions({
           width: mapContainerRef.current.offsetWidth,
           height: mapContainerRef.current.offsetHeight,
         });
       }
-    };
+    }, 200);
 
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
 
     return () => window.removeEventListener("resize", updateDimensions);
   }, []);
+
+  const CenteredAnnotation = ({
+    geo,
+    name,
+    zoom,
+  }: {
+    geo: any;
+    name: string;
+    zoom: number;
+  }) => {
+    const centroid = geoCentroid(geo);
+    const [[x0, y0], [x1, y1]] = geoBounds(geo);
+    const area = Math.abs((x1 - x0) * (y1 - y0));
+
+    const minAreaThreshold = 10 / (zoom * zoom);
+    const isCountry =
+      geo?.properties?.TYPE === "Country" ||
+      geo?.properties?.type === "Country" ||
+      geo?.properties?.type === "Sovereign country" ||
+      geo?.properties?.TYPE === "Sovereign country";
+    const isBigCountry =
+      isCountry &&
+      geo?.properties?.NAME != "France" &&
+      geo?.properties?.NAME != "Chile" &&
+      geo?.properties?.NAME != "Netherlands" &&
+      area > 1000;
+
+    if (area < minAreaThreshold) {
+      return null;
+    }
+
+    return (
+      <Annotation
+        subject={centroid}
+        dx={
+          isCountry && geo?.properties?.NAME === "France"
+            ? 35
+            : 0 ||
+              (isCountry &&
+                geo?.properties?.NAME === "United States of America")
+            ? 20
+            : 0 || (isCountry && geo?.properties?.NAME === "Canada")
+            ? -60
+            : 0
+        }
+        dy={
+          isCountry && geo?.properties?.NAME === "France"
+            ? -20
+            : 0 ||
+              (isCountry &&
+                geo?.properties?.NAME === "United States of America")
+            ? 30
+            : 0
+        }
+        connectorProps={{
+          stroke: "transparent",
+          strokeWidth: 0,
+        }}
+      >
+        <g pointerEvents="none">
+          <text
+            textAnchor="middle"
+            alignmentBaseline="middle"
+            fill="#8dc6ff9f"
+            fontSize={isBigCountry ? 15 : 22 / (zoom * 3)}
+            opacity={0.7}
+            style={{ pointerEvents: "none" }}
+          >
+            {name}
+          </text>
+        </g>
+      </Annotation>
+    );
+  };
+
   return (
     <div
       ref={mapContainerRef}
@@ -283,154 +372,59 @@ const MapView = ({ groupedPeers }: { groupedPeers: IGroupedPeers }) => {
             [mapDimensions.width + 33, mapDimensions.height + 409],
           ]}
         >
-          <Geographies geography={countries}>
+          <Geographies geography={"/combinedTest3.geojson"}>
             {({ geographies }) =>
               geographies.map((geo) => {
-                const countryName = geo?.properties?.NAME;
+                const name = geo?.properties?.NAME || geo?.properties?.name;
+                const isState =
+                  geo?.properties?.TYPE ||
+                  geo?.properties?.type === "State" ||
+                  "Province";
+                const isCountry =
+                  geo?.properties?.TYPE === "Country" ||
+                  geo?.properties?.type === "Country" ||
+                  geo?.properties?.type === "Sovereign country" ||
+                  geo?.properties?.TYPE === "Sovereign country";
 
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={"#1F2937"}
-                    style={{
-                      default: { outline: "none" },
-                      hover: {
-                        outline: "none",
-                        fill: "#2C3E50",
-                        cursor: "pointer",
-                      },
-                      pressed: { outline: "none", fill: "#4CAF50" },
-                    }}
-                    stroke="#EAEAEC"
-                    strokeWidth={position.zoom <= 4 ? 0.2 : 0.1}
-                    onClick={() => handleCountryClick(geo)}
-                    onMouseEnter={() => {
-                      const centroid = geoCentroid(geo);
-                      const fontSize = calculateFontSize(geo);
-                      setCurrentAnnotation({
-                        coordinates: centroid,
-                        name: `${geo.properties.NAME}`,
-                        fontSize,
-                      });
-                    }}
-                    onMouseLeave={() => {
-                      setCurrentAnnotation(null);
-                    }}
-                  />
-                );
+                const shouldRender =
+                  (isCountry && position.zoom <= 2) ||
+                  (isState && position.zoom > 2) ||
+                  (isCountry && !isState);
+
+                return shouldRender ? (
+                  <React.Fragment key={geo.rsmKey}>
+                    <Geography
+                      geography={geo}
+                      fill={"#1F2937"}
+                      style={{
+                        default: { outline: "none" },
+                        hover: {
+                          outline: "none",
+                          fill: "#2C3E50",
+                          cursor: "pointer",
+                        },
+                        pressed: { outline: "none", fill: "#4CAF50" },
+                      }}
+                      stroke="#EAEAEC"
+                      strokeWidth={position.zoom <= 4 ? 0.2 : 0.1}
+                      onClick={() =>
+                        isCountry
+                          ? handleCountryClick(geo)
+                          : handleStateClick(geo)
+                      }
+                    />
+                    <CenteredAnnotation
+                      geo={geo}
+                      name={name}
+                      zoom={position.zoom}
+                    />
+                  </React.Fragment>
+                ) : null;
               })
             }
           </Geographies>
 
-          {position.zoom >= 2 && (
-            <Geographies geography={states}>
-              {({ geographies }) =>
-                geographies.map((geo) => (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={"#1F2937"}
-                    style={{
-                      default: { outline: "none" },
-                      hover: {
-                        outline: "none",
-                        fill: "#2C3E50",
-                        cursor: "pointer",
-                      },
-                      pressed: { outline: "none", stroke: "#0080ff" },
-                    }}
-                    stroke="#EAEAEC"
-                    strokeWidth={position.zoom <= 4 ? 0.2 : 0.1}
-                    onClick={() => handleStateClick(geo)}
-                    onMouseEnter={() => {
-                      const centroid = geoCentroid(geo);
-                      const fontSize = calculateFontSize(geo);
-                      setCurrentStateAnnotation({
-                        coordinates: centroid,
-                        name: `${geo.properties.name}`,
-                        fontSize,
-                      });
-                    }}
-                    onMouseLeave={() => {
-                      setCurrentStateAnnotation(null);
-                    }}
-                  />
-                ))
-              }
-            </Geographies>
-          )}
-
           {scaledMarkers}
-
-          {currentAnnotation && position.zoom <= 2 && (
-            <Annotation
-              subject={currentAnnotation.coordinates}
-              dx={0}
-              dy={-7}
-              connectorProps={{
-                stroke: "transparent",
-                strokeWidth: 0,
-              }}
-              z={99}
-            >
-              <g pointerEvents="none">
-                <BackgroundRect
-                  text={currentAnnotation.name}
-                  fontSize={8}
-                  padding={10}
-                />
-                <text
-                  x={0}
-                  y={1}
-                  textAnchor="middle"
-                  alignmentBaseline="middle"
-                  fill="#8dc6ff"
-                  fontSize={8}
-                  style={{ pointerEvents: "none" }}
-                >
-                  {currentAnnotation.name}
-                </text>
-              </g>
-            </Annotation>
-          )}
-
-          {currentStateAnnotation &&
-            position.zoom >= 2 &&
-            position.zoom < 8 && (
-              <Annotation
-                subject={currentStateAnnotation.coordinates}
-                dx={0}
-                dy={-4}
-                connectorProps={{
-                  stroke: "transparent",
-                  strokeWidth: 0,
-                }}
-                z={99}
-              >
-                <g pointerEvents="none">
-                  <rect
-                    x={-20}
-                    y={-9}
-                    width={40}
-                    height={8}
-                    fill="rgba(0, 0, 0, 0.859)"
-                    rx={2}
-                  />
-                  <text
-                    x={0}
-                    y={-5}
-                    textAnchor="middle"
-                    alignmentBaseline="middle"
-                    fill="#8dc6ff"
-                    fontSize={5}
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {currentStateAnnotation.name}
-                  </text>
-                </g>
-              </Annotation>
-            )}
         </ZoomableGroup>
       </ComposableMap>
 
